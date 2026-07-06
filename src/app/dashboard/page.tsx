@@ -1,0 +1,56 @@
+import { redirect } from "next/navigation";
+import { auth, signOut } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { PreferencesForm } from "./components/PreferencesForm";
+import { SyncStatusPanel } from "./components/SyncStatusPanel";
+import { UpcomingContestsList } from "./components/UpcomingContestsList";
+
+export default async function DashboardPage() {
+  const session = await auth();
+  if (!session?.user) {
+    redirect("/");
+  }
+
+  const userId = session.user.id;
+
+  const [preference, latestRun, upcomingContests] = await Promise.all([
+    prisma.userPreference.findUnique({ where: { userId } }),
+    prisma.syncRun.findFirst({ where: { userId }, orderBy: { startedAt: "desc" } }),
+    prisma.syncedContest.findMany({
+      where: { userId, status: "SUCCESS", startTime: { gte: new Date() } },
+      orderBy: { startTime: "asc" },
+      take: 50,
+    }),
+  ]);
+
+  return (
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-12">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Dashboard</h1>
+          <p className="text-sm text-zinc-500">{session.user.email}</p>
+        </div>
+        <form
+          action={async () => {
+            "use server";
+            await signOut({ redirectTo: "/" });
+          }}
+        >
+          <button type="submit" className="text-sm text-zinc-500 underline">
+            Sign out
+          </button>
+        </form>
+      </div>
+
+      <PreferencesForm
+        initialPlatforms={preference?.platforms ?? []}
+        initialDaysAhead={preference?.daysAhead ?? 14}
+        timeZone={preference?.timeZone ?? "UTC"}
+      />
+
+      <SyncStatusPanel lastSyncedAt={preference?.lastSyncedAt ?? null} latestRun={latestRun} />
+
+      <UpcomingContestsList contests={upcomingContests} />
+    </div>
+  );
+}

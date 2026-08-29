@@ -5,6 +5,9 @@ import Google from "next-auth/providers/google";
 // code (e.g. node:crypto), so this can be imported from middleware, which
 // runs on the Edge runtime. The full config in auth.ts extends this.
 export const authConfig = {
+  // Required on non-Vercel hosts (Netlify, etc.) so Auth.js trusts the
+  // X-Forwarded-Host header when constructing OAuth callback URLs.
+  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     Google({

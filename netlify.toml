@@ -1,0 +1,17 @@
+# Netlify build config. The official Next.js runtime (@netlify/plugin-nextjs) is
+# auto-installed by Netlify when it detects Next.js; it turns the App Router
+# server (SSR pages, API routes, server actions, middleware) into functions.
+
+[build]
+  # Apply any pending Prisma migrations to the database, then build.
+  # `prisma migrate deploy` uses DIRECT_URL (see prisma/schema.prisma).
+  command = "npx prisma migrate deploy && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# The daily sync is triggered by GitHub Actions (.github/workflows/cron.yml)
+# hitting /api/cron/sync-all. Note: Netlify Free caps a function at 10s, and
+# that route does its work synchronously, so it must finish within 10s. That's
+# fine for a small number of users (4 platform fetches run in parallel); if it
+# ever times out, move the actual sync work into the GitHub Actions job.

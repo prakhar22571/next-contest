@@ -15,7 +15,8 @@ AtCoder, CodeChef) — no third-party aggregator or API key.
 ### 1. Database
 
 Provision a free Postgres instance (e.g. [Neon](https://neon.tech) or [Supabase](https://supabase.com))
-and copy its connection string into `DATABASE_URL`.
+and copy its connection string into `DATABASE_URL` (and `DIRECT_URL` — locally they can be the
+same; on Neon see the [Deploying](#deploying-free-tier-netlify--neon--github-actions) section).
 
 ### 2. Google Cloud OAuth client
 
@@ -58,7 +59,7 @@ screen asks for calendar-events access.
 ## How it works
 
 - `src/auth.ts` — Auth.js Google provider requesting offline access (`access_type=offline`,
-  `prompt=consent`) so a refresh token is always issued. The `signIn` callback encrypts and stores
+  `prompt=consent`) so a refresh token is always issued. The `signIn` *event* encrypts and stores
   it in the `GoogleCredential` table (independent of Auth.js's own `Account` row) so background
   syncs work without an active browser session.
 - `src/lib/contests/` — one module per platform under `sources/` (Codeforces' official API,
@@ -76,8 +77,7 @@ screen asks for calendar-events access.
   keep request volume to the platform APIs low.
 - `PUT /api/preferences` — saves a user's platform/day-range choices and immediately syncs.
 - `GET /api/cron/sync-all` — protected by a `CRON_SECRET` bearer token; triggered daily by
-  Vercel Cron (see `vercel.json`). On another host, point any scheduler (GitHub Actions cron, a VM
-  cron job, etc.) at this same route with that header.
+  `.github/workflows/cron.yml` (GitHub Actions `schedule`), which just `curl`s this route.
 
 ## Verifying end-to-end
 
@@ -86,3 +86,38 @@ screen asks for calendar-events access.
 2. Save the same preferences again and confirm no duplicate events are created.
 3. `curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync-all` to
    exercise the cron fan-out path manually.
+
+## Deploying (free tier: Netlify + Neon + GitHub Actions)
+
+This is a single Next.js app — pages, API routes and server actions all deploy together to one
+host. The pieces:
+
+| Piece | Service | Notes |
+| --- | --- | --- |
+| App | **Netlify** | `@netlify/plugin-nextjs` runs the App Router server as functions. Config in `netlify.toml`. |
+| Postgres | **Neon** | Free, never expires. `DATABASE_URL` = pooled endpoint, `DIRECT_URL` = direct (for migrations). |
+| Daily sync | **GitHub Actions** | `.github/workflows/cron.yml` curls `/api/cron/sync-all` at 03:00 UTC. |
+
+### 1. Database (Neon)
+
+Create a project at [neon.tech](https://neon.tech). From the dashboard's connection panel copy
+**both** strings: the *pooled* one (host contains `-pooler`) into `DATABASE_URL`, and the
+*direct* one into `DIRECT_URL`.
+
+### 2. App (Netlify)
+
+1. Push this repo to GitHub and "Add new site → Import an existing project" on
+   [netlify.com](https://netlify.com). Build settings come from `netlify.toml`.
+2. Set environment variables (Site config → Environment variables): `DATABASE_URL`, `DIRECT_URL`,
+   `AUTH_SECRET`, `ENCRYPTION_KEY`, `CRON_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+   `AUTH_TRUST_HOST=true`, and `NEXTAUTH_URL=https://<your-site>.netlify.app`.
+3. Deploy. The build runs `prisma migrate deploy` against Neon automatically. Seed the platform
+   catalog once: `DATABASE_URL=<neon-direct-url> npx prisma db seed` from your machine.
+4. In Google Cloud Console, add `https://<your-site>.netlify.app/api/auth/callback/google` to the
+   OAuth client's authorized redirect URIs.
+
+### 3. Cron (GitHub Actions)
+
+In the GitHub repo → Settings → Secrets and variables → Actions, add:
+`APP_URL=https://<your-site>.netlify.app` and `CRON_SECRET=<same value as Netlify>`.
+The workflow then runs daily; trigger it manually once from the Actions tab to verify.

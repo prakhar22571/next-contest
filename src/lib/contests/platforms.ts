@@ -1,14 +1,11 @@
-// clist.by "resource" slugs -> display names for platforms we support in the UI.
-// https://clist.by/api/v4/resource/ lists all resources; these are the common
-// competitive-programming ones surfaced in the dashboard.
+// Platforms surfaced in the dashboard. Each slug has a matching source module in
+// ./sources and an entry in ./client's SOURCES map. Slugs are kept in the
+// clist.by "resource" style ("codeforces.com") for continuity with existing data.
 export const PLATFORM_CATALOG = [
   { slug: "codeforces.com", name: "Codeforces" },
   { slug: "leetcode.com", name: "LeetCode" },
   { slug: "atcoder.jp", name: "AtCoder" },
   { slug: "codechef.com", name: "CodeChef" },
-  { slug: "hackerrank.com", name: "HackerRank" },
-  { slug: "codingcompetitions.withgoogle.com", name: "Google Code Jam / Kick Start" },
-  { slug: "topcoder.com", name: "TopCoder" },
 ] as const;
 
 export type PlatformSlug = (typeof PLATFORM_CATALOG)[number]["slug"];

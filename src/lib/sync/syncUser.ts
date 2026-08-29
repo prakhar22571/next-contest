@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { fetchContests } from "@/lib/clist/client";
-import { platformName } from "@/lib/clist/platforms";
+import { fetchContests } from "@/lib/contests/client";
+import { platformName } from "@/lib/contests/platforms";
 import { getAuthorizedClient, createContestEvent } from "@/lib/google/calendar";
-import type { ClistContest } from "@/lib/clist/types";
+import type { Contest } from "@/lib/contests/types";
 import type { SyncTrigger } from "@prisma/client";
 
 const MS_PER_DAY = 86_400_000;
@@ -16,7 +16,7 @@ export interface SyncResult {
 export async function syncUserContests(
   userId: string,
   trigger: SyncTrigger,
-  contestsOverride?: ClistContest[]
+  contestsOverride?: Contest[]
 ): Promise<SyncResult | null> {
   const pref = await prisma.userPreference.findUnique({ where: { userId } });
   if (!pref || pref.platforms.length === 0) return null;

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { fetchContests } from "@/lib/clist/client";
+import { fetchContests } from "@/lib/contests/client";
 import { syncUserContests } from "@/lib/sync/syncUser";
-import type { ClistContest } from "@/lib/clist/types";
+import type { Contest } from "@/lib/contests/types";
 
 const MS_PER_DAY = 86_400_000;
 const CONCURRENCY = 4;
@@ -17,8 +17,8 @@ export interface SyncAllResult {
 }
 
 // Cron entry point. Fetches each distinct platform selected across all users
-// just once (instead of once per user) to stay well under clist.by's rate
-// limit, then syncs each user from that shared, in-memory contest set.
+// just once (instead of once per user) to keep request volume to the platform
+// APIs low, then syncs each user from that shared, in-memory contest set.
 export async function syncAllUsers(): Promise<SyncAllResult> {
   const prefs = await prisma.userPreference.findMany({
     where: {
@@ -34,7 +34,7 @@ export async function syncAllUsers(): Promise<SyncAllResult> {
   const now = new Date();
   const windowEnd = new Date(now.getTime() + maxDays * MS_PER_DAY);
 
-  const contestsByResource = new Map<string, ClistContest[]>();
+  const contestsByResource = new Map<string, Contest[]>();
   for (const resource of distinctResources) {
     const contests = await fetchContests({ resources: [resource], startGte: now, startLte: windowEnd });
     contestsByResource.set(resource, contests);

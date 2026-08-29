@@ -1,5 +1,5 @@
 import type { SyncedContest } from "@prisma/client";
-import { platformName } from "@/lib/clist/platforms";
+import { platformName } from "@/lib/contests/platforms";
 
 interface UpcomingContestsListProps {
   contests: SyncedContest[];

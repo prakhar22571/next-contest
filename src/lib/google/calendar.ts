@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
-import type { ClistContest } from "@/lib/clist/types";
+import type { Contest } from "@/lib/contests/types";
 
 export async function getAuthorizedClient(userId: string) {
   const cred = await prisma.googleCredential.findUniqueOrThrow({ where: { userId } });
@@ -29,7 +29,7 @@ export async function getAuthorizedClient(userId: string) {
 
 export async function createContestEvent(
   auth: InstanceType<typeof google.auth.OAuth2>,
-  contest: ClistContest,
+  contest: Contest,
   platformName: string,
   timeZone: string
 ) {
@@ -43,7 +43,7 @@ export async function createContestEvent(
       end: { dateTime: contest.end, timeZone },
       source: { title: platformName, url: contest.href },
       extendedProperties: {
-        private: { clistContestId: String(contest.id), platform: contest.resource },
+        private: { contestId: String(contest.id), platform: contest.resource },
       },
       reminders: { useDefault: true },
     },

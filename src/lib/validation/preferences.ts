@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isValidPlatformSlug } from "@/lib/clist/platforms";
+import { isValidPlatformSlug } from "@/lib/contests/platforms";
 
 export const DAYS_AHEAD_OPTIONS = [7, 14, 30] as const;
 

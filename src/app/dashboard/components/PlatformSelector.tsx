@@ -1,6 +1,6 @@
 "use client";
 
-import { PLATFORM_CATALOG } from "@/lib/clist/platforms";
+import { PLATFORM_CATALOG } from "@/lib/contests/platforms";
 
 interface PlatformSelectorProps {
   selected: string[];

@@ -75,7 +75,7 @@ model GoogleCredential {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Seeded catalog of supported platforms -> clist.by resource slugs.
+// Seeded catalog of supported platforms. Slugs use the "codeforces.com" style.
 model Platform {
   id       Int     @id @default(autoincrement())
   slug     String  @unique

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PreferencesForm } from "./components/PreferencesForm";
 import { SyncStatusPanel } from "./components/SyncStatusPanel";
 import { UpcomingContestsList } from "./components/UpcomingContestsList";
+import { StripOAuthParams } from "./components/StripOAuthParams";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -25,6 +26,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-12">
+      <StripOAuthParams />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Dashboard</h1>

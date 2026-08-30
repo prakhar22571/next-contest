@@ -1,5 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { daysFromNow, errorMessage } from "@/lib/util";
+import { fetchContests } from "@/lib/contests";
 import { preferencesSchema } from "@/lib/validation/preferences";
 import { syncUserContests } from "@/lib/sync/syncUser";
 
@@ -29,18 +31,15 @@ export async function PUT(req: Request) {
     update: { platforms, daysAhead, timeZone },
   });
 
-  let sync = null;
   try {
-    sync = await syncUserContests(session.user.id, "MANUAL");
+    const contests = await fetchContests({
+      resources: platforms,
+      startGte: new Date(),
+      startLte: daysFromNow(daysAhead),
+    });
+    const sync = await syncUserContests(session.user.id, "MANUAL", contests);
+    return Response.json({ preference, sync });
   } catch (err) {
-    return Response.json(
-      {
-        preference,
-        syncError: String(err instanceof Error ? err.message : err),
-      },
-      { status: 207 }
-    );
+    return Response.json({ preference, syncError: errorMessage(err) }, { status: 207 });
   }
-
-  return Response.json({ preference, sync });
 }

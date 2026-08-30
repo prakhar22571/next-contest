@@ -1,11 +1,8 @@
+import type { SyncTrigger, UserPreference } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { fetchContests } from "@/lib/contests/client";
-import { platformName } from "@/lib/contests/platforms";
-import { getAuthorizedClient, createContestEvent } from "@/lib/google/calendar";
+import { errorMessage, DAY_MS } from "@/lib/util";
+import { authorizedClientFor, createContestEvent } from "@/lib/google/calendar";
 import type { Contest } from "@/lib/contests/types";
-import type { SyncTrigger } from "@prisma/client";
-
-const MS_PER_DAY = 86_400_000;
 
 export interface SyncResult {
   found: number;
@@ -13,122 +10,126 @@ export interface SyncResult {
   failed: number;
 }
 
-export async function syncUserContests(
+type Outcome =
+  | { status: "SUCCESS"; calendarEventId: string | null }
+  | { status: "FAILED"; errorMessage: string };
+
+// Narrow a batch of contests to the ones this user actually wants: their
+// selected platforms, starting within their look-ahead window.
+export function contestsForPreference(
+  contests: Contest[],
+  pref: Pick<UserPreference, "platforms" | "daysAhead">
+): Contest[] {
+  const cutoff = Date.now() + pref.daysAhead * DAY_MS;
+  return contests.filter(
+    (c) => pref.platforms.includes(c.resource) && new Date(c.start).getTime() <= cutoff
+  );
+}
+
+async function syncedContestIds(userId: string, contests: Contest[]): Promise<Set<string>> {
+  if (contests.length === 0) return new Set();
+  const rows = await prisma.syncedContest.findMany({
+    where: { userId, status: "SUCCESS", contestId: { in: contests.map((c) => c.id) } },
+    select: { contestId: true },
+  });
+  return new Set(rows.map((r) => r.contestId));
+}
+
+function recordContest(userId: string, c: Contest, outcome: Outcome) {
+  const identity = {
+    userId,
+    contestId: c.id,
+    platform: c.resource,
+    title: c.event,
+    startTime: new Date(c.start),
+    endTime: new Date(c.end),
+    contestUrl: c.href,
+  };
+  const state =
+    outcome.status === "SUCCESS"
+      ? { status: "SUCCESS" as const, calendarEventId: outcome.calendarEventId, errorMessage: null }
+      : { status: "FAILED" as const, errorMessage: outcome.errorMessage };
+
+  return prisma.syncedContest.upsert({
+    where: { userId_contestId: { userId, contestId: c.id } },
+    create: { ...identity, ...state },
+    update: { ...state, syncedAt: new Date() },
+  });
+}
+
+// Wraps `work` in a SyncRun row: records SUCCESS + bumps lastSyncedAt, or marks
+// the run FAILED and rethrows.
+async function withSyncRun(
   userId: string,
   trigger: SyncTrigger,
-  contestsOverride?: Contest[]
-): Promise<SyncResult | null> {
-  const pref = await prisma.userPreference.findUnique({ where: { userId } });
-  if (!pref || pref.platforms.length === 0) return null;
-
-  const credential = await prisma.googleCredential.findUnique({ where: { userId } });
-  if (!credential) return null;
-
+  work: () => Promise<SyncResult>
+): Promise<SyncResult> {
   const run = await prisma.syncRun.create({ data: { userId, trigger } });
-
   try {
-    const now = new Date();
-    const windowEnd = new Date(now.getTime() + pref.daysAhead * MS_PER_DAY);
-
-    const contests = contestsOverride
-      ? contestsOverride.filter(
-          (c) => pref.platforms.includes(c.resource) && new Date(c.start) <= windowEnd
-        )
-      : await fetchContests({ resources: pref.platforms, startGte: now, startLte: windowEnd });
-
-    const existing = await prisma.syncedContest.findMany({
-      where: { userId, contestId: { in: contests.map((c) => String(c.id)) } },
-    });
-    const alreadySucceeded = new Set(
-      existing.filter((e) => e.status === "SUCCESS").map((e) => e.contestId)
-    );
-    const toProcess = contests.filter((c) => !alreadySucceeded.has(String(c.id)));
-
-    let created = 0;
-    let failed = 0;
-
-    if (toProcess.length > 0) {
-      const authClient = await getAuthorizedClient(userId);
-
-      for (const contest of toProcess) {
-        try {
-          const event = await createContestEvent(
-            authClient,
-            contest,
-            platformName(contest.resource),
-            pref.timeZone
-          );
-          await prisma.syncedContest.upsert({
-            where: { userId_contestId: { userId, contestId: String(contest.id) } },
-            create: {
-              userId,
-              contestId: String(contest.id),
-              platform: contest.resource,
-              title: contest.event,
-              startTime: new Date(contest.start),
-              endTime: new Date(contest.end),
-              contestUrl: contest.href,
-              calendarEventId: event.id,
-              status: "SUCCESS",
-            },
-            update: {
-              calendarEventId: event.id,
-              status: "SUCCESS",
-              errorMessage: null,
-              syncedAt: new Date(),
-            },
-          });
-          created++;
-        } catch (err) {
-          failed++;
-          // Per-contest failure doesn't stop the rest of the batch.
-          await prisma.syncedContest.upsert({
-            where: { userId_contestId: { userId, contestId: String(contest.id) } },
-            create: {
-              userId,
-              contestId: String(contest.id),
-              platform: contest.resource,
-              title: contest.event,
-              startTime: new Date(contest.start),
-              endTime: new Date(contest.end),
-              contestUrl: contest.href,
-              status: "FAILED",
-              errorMessage: String(err instanceof Error ? err.message : err),
-            },
-            update: {
-              status: "FAILED",
-              errorMessage: String(err instanceof Error ? err.message : err),
-              syncedAt: new Date(),
-            },
-          });
-        }
-      }
-    }
-
+    const result = await work();
     await prisma.$transaction([
       prisma.syncRun.update({
         where: { id: run.id },
         data: {
           status: "SUCCESS",
           finishedAt: new Date(),
-          contestsFound: contests.length,
-          contestsCreated: created,
-          contestsFailed: failed,
+          contestsFound: result.found,
+          contestsCreated: result.created,
+          contestsFailed: result.failed,
         },
       }),
       prisma.userPreference.update({ where: { userId }, data: { lastSyncedAt: new Date() } }),
     ]);
-
-    return { found: contests.length, created, failed };
+    return result;
   } catch (err) {
     await prisma.syncRun.update({
       where: { id: run.id },
-      data: {
-        status: "FAILED",
-        finishedAt: new Date(),
-        errorMessage: String(err instanceof Error ? err.message : err),
-      },
+      data: { status: "FAILED", finishedAt: new Date(), errorMessage: errorMessage(err) },
     });
     throw err;
   }
+}
+
+// Syncs one user against a batch of already-fetched contests: create a calendar
+// event for each new one, skip those already synced, retry past failures. A
+// per-contest failure is recorded and doesn't stop the batch. Returns null if
+// the user has nothing configured.
+export async function syncUserContests(
+  userId: string,
+  trigger: SyncTrigger,
+  contests: Contest[]
+): Promise<SyncResult | null> {
+  const [pref, credential] = await Promise.all([
+    prisma.userPreference.findUnique({ where: { userId } }),
+    prisma.googleCredential.findUnique({ where: { userId } }),
+  ]);
+  if (!pref || pref.platforms.length === 0 || !credential) return null;
+
+  return withSyncRun(userId, trigger, async () => {
+    const scoped = contestsForPreference(contests, pref);
+    const done = await syncedContestIds(userId, scoped);
+    const todo = scoped.filter((c) => !done.has(c.id));
+
+    let created = 0;
+    let failed = 0;
+
+    if (todo.length > 0) {
+      const client = authorizedClientFor(userId, credential.encryptedRefreshToken);
+      for (const contest of todo) {
+        try {
+          const event = await createContestEvent(client, contest, pref.timeZone);
+          await recordContest(userId, contest, {
+            status: "SUCCESS",
+            calendarEventId: event.id ?? null,
+          });
+          created++;
+        } catch (err) {
+          await recordContest(userId, contest, { status: "FAILED", errorMessage: errorMessage(err) });
+          failed++;
+        }
+      }
+    }
+
+    return { found: scoped.length, created, failed };
+  });
 }

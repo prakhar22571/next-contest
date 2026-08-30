@@ -1,13 +1,12 @@
 import type { Contest } from "./types";
+import { errorMessage } from "@/lib/util";
 import { fetchCodeforces } from "./sources/codeforces";
 import { fetchLeetCode } from "./sources/leetcode";
 import { fetchAtCoder } from "./sources/atcoder";
 import { fetchCodeChef } from "./sources/codechef";
 
-type SourceFn = () => Promise<Contest[]>;
-
 // Slug -> upcoming-contest fetcher. Keys must match PLATFORM_CATALOG.
-const SOURCES: Record<string, SourceFn> = {
+const SOURCES: Record<string, () => Promise<Contest[]>> = {
   "codeforces.com": fetchCodeforces,
   "leetcode.com": fetchLeetCode,
   "atcoder.jp": fetchAtCoder,
@@ -20,11 +19,10 @@ export interface FetchContestsParams {
   startLte: Date;
 }
 
-// Drop-in replacement for the old clist.by client: fetches each requested
-// platform directly, in parallel, and returns the union filtered to the window.
-// A single platform failing never fails the whole call; if *every* requested
-// platform fails we throw, so the caller records a failed sync instead of
-// silently treating an outage as "no contests".
+// Fetches each requested platform directly, in parallel, and returns the union
+// filtered to [startGte, startLte] and sorted by start. One platform failing is
+// logged and skipped; only every requested platform failing throws, so the
+// caller records a failed sync instead of mistaking an outage for "no contests".
 export async function fetchContests({
   resources,
   startGte,
@@ -38,21 +36,14 @@ export async function fetchContests({
   const contests: Contest[] = [];
   const errors: string[] = [];
   settled.forEach((result, i) => {
-    if (result.status === "fulfilled") {
-      contests.push(...result.value);
-    } else {
-      const reason =
-        result.reason instanceof Error ? result.reason.message : String(result.reason);
-      errors.push(`${wanted[i]}: ${reason}`);
-    }
+    if (result.status === "fulfilled") contests.push(...result.value);
+    else errors.push(`${wanted[i]}: ${errorMessage(result.reason)}`);
   });
 
   if (errors.length === wanted.length) {
-    throw new Error(`All contest sources failed - ${errors.join("; ")}`);
+    throw new Error(`all contest sources failed - ${errors.join("; ")}`);
   }
-  if (errors.length > 0) {
-    console.warn(`[contests] partial fetch failure - ${errors.join("; ")}`);
-  }
+  if (errors.length > 0) console.warn(`[contests] partial fetch failure - ${errors.join("; ")}`);
 
   const gte = startGte.getTime();
   const lte = startLte.getTime();

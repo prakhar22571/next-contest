@@ -1,5 +1,5 @@
 import type { Contest } from "../types";
-import { httpGet } from "./http";
+import { fetchJson } from "./http";
 
 const RESOURCE = "codechef.com";
 
@@ -10,15 +10,11 @@ interface CodeChefContest {
   contest_end_date_iso: string;
 }
 
-// Unofficial but long-stable endpoint that backs the codechef.com/contests page.
-// Needs a User-Agent or it 403s.
+// Unofficial but long-stable endpoint behind the codechef.com/contests page.
 export async function fetchCodeChef(): Promise<Contest[]> {
-  const res = await httpGet("https://www.codechef.com/api/list/contests/all", {
-    Accept: "application/json",
-  });
-  if (!res.ok) throw new Error(`CodeChef API returned ${res.status}`);
-
-  const json = (await res.json()) as { future_contests?: CodeChefContest[] };
+  const json = await fetchJson<{ future_contests?: CodeChefContest[] }>(
+    "https://www.codechef.com/api/list/contests/all"
+  );
 
   return (json.future_contests ?? []).map((c) => ({
     id: `${RESOURCE}:${c.contest_code}`,

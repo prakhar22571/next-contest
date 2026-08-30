@@ -1,5 +1,5 @@
 import type { Contest } from "../types";
-import { httpGet } from "./http";
+import { fetchText } from "./http";
 
 const RESOURCE = "atcoder.jp";
 
@@ -22,12 +22,7 @@ function decodeEntities(s: string): string {
 }
 
 export async function fetchAtCoder(): Promise<Contest[]> {
-  const res = await httpGet("https://atcoder.jp/contests/?lang=en", {
-    Accept: "text/html",
-  });
-  if (!res.ok) throw new Error(`AtCoder contests page returned ${res.status}`);
-
-  const html = await res.text();
+  const html = await fetchText("https://atcoder.jp/contests/?lang=en");
   const tableStart = html.indexOf('id="contest-table-upcoming"');
   if (tableStart === -1) {
     throw new Error("AtCoder contests page: upcoming table not found (layout changed?)");

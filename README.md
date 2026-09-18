@@ -9,6 +9,12 @@ dashboard, then the **tick** to confirm or **cross** to cancel. After confirmati
 deleted and excluded from future manual and daily syncs. Removal only affects the signed-in
 user's event; failed removals can be retried.
 
+Use **Remove by platform** to delete all already-synced upcoming events for one platform with
+the trash icon and a tick to confirm (or cross to cancel). This includes events beyond the
+dashboard's first 50 rows. If some removals fail, successful ones stay removed and the remaining
+ones can be retried. To stop syncing newly announced contests too, deselect that platform in
+preferences and save.
+
 ## Stack
 
 Next.js (App Router) + Auth.js (NextAuth v5, Google OAuth) + Prisma/Postgres + the Google

@@ -14,13 +14,23 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  const [preference, latestRun, upcomingContests] = await Promise.all([
+  const now = new Date();
+  const [preference, latestRun, upcomingContests, platformCounts] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId } }),
     prisma.syncRun.findFirst({ where: { userId }, orderBy: { startedAt: "desc" } }),
     prisma.syncedContest.findMany({
-      where: { userId, status: "SUCCESS", startTime: { gte: new Date() } },
+      where: { userId, status: "SUCCESS", startTime: { gte: now } },
       orderBy: { startTime: "asc" },
       take: 50,
+    }),
+    prisma.syncedContest.groupBy({
+      by: ["platform"],
+      where: {
+        userId, status: "SUCCESS", startTime: { gte: now },
+        calendarEventId: { not: null },
+      },
+      _count: { _all: true },
+      orderBy: { platform: "asc" },
     }),
   ]);
 
@@ -52,7 +62,10 @@ export default async function DashboardPage() {
 
       <SyncStatusPanel lastSyncedAt={preference?.lastSyncedAt ?? null} latestRun={latestRun} />
 
-      <UpcomingContestsList contests={upcomingContests} />
+      <UpcomingContestsList
+        contests={upcomingContests}
+        platformCounts={platformCounts.map((group) => ({ platform: group.platform, count: group._count._all }))}
+      />
     </div>
   );
 }

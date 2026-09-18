@@ -4,10 +4,12 @@ import { google } from "googleapis";
 import type { SyncedContest } from "@prisma/client";
 import { prisma } from "../src/lib/prisma";
 import { encrypt } from "../src/lib/crypto";
-import { removeUserContest } from "../src/lib/sync/removeUserContest";
+import { removeUserContest, removeUserPlatformContests } from "../src/lib/sync/removeUserContest";
 import { syncUserContests } from "../src/lib/sync/syncUser";
 
 let row: SyncedContest;
+let rows: SyncedContest[];
+let eventErrors: Map<string, Error>;
 let deleteError: unknown;
 let databaseError: Error | undefined;
 let hasCredential: boolean;
@@ -33,6 +35,8 @@ beforeEach(() => {
     startTime: new Date(Date.now() + 3_600_000), endTime: new Date(Date.now() + 7_200_000),
     syncedAt: new Date(), errorMessage: null,
   };
+  rows = [row];
+  eventErrors = new Map();
   deleteError = undefined;
   databaseError = undefined;
   hasCredential = true;
@@ -40,16 +44,29 @@ beforeEach(() => {
   insertedEvents = 0;
 
   stub(prisma.syncedContest, "findFirst", async ({ where }: { where: { id: string; userId: string } }) =>
-    where.id === row.id && where.userId === row.userId ? { ...row } : null
+    rows.find((record) => where.id === record.id && where.userId === record.userId) ?? null
   );
+  stub(prisma.syncedContest, "findMany", async ({ where, take }: {
+    where: {
+      userId?: string; platform?: string; status?: string;
+      startTime?: { gte: Date }; calendarEventId?: { not: null };
+    }; take?: number;
+  }) => rows.filter((record) =>
+    (!where.userId || record.userId === where.userId) &&
+    (!where.platform || record.platform === where.platform) &&
+    (!where.status || record.status === where.status) &&
+    (!where.startTime || record.startTime >= where.startTime.gte) &&
+    (!where.calendarEventId || record.calendarEventId !== null)
+  ).slice(0, take).map((record) => ({ ...record })));
   stub(prisma.syncedContest, "update", async ({ where, data }: {
     where: { id: string; userId: string }; data: Partial<SyncedContest>;
   }) => {
-    assert.equal(where.id, row.id);
-    assert.equal(where.userId, row.userId);
+    const record = rows.find((record) => record.id === where.id);
+    assert.ok(record);
+    assert.equal(where.userId, record.userId);
     if (databaseError) throw databaseError;
-    Object.assign(row, data);
-    return { ...row };
+    Object.assign(record, data);
+    return { ...record };
   });
   stub(prisma.googleCredential, "findUnique", async ({ where }: { where: { userId: string } }) => {
     assert.equal(where.userId, "owner");
@@ -60,11 +77,81 @@ beforeEach(() => {
       delete: async ({ calendarId, eventId }: { calendarId: string; eventId: string }) => {
         assert.equal(calendarId, "primary");
         deletedEventIds.push(eventId);
+        if (eventErrors.has(eventId)) throw eventErrors.get(eventId);
         if (deleteError) throw deleteError;
       },
       insert: async () => { insertedEvents++; return { data: { id: "new-event" } }; },
     },
   }));
+});
+
+test("platform removal covers more than 50 events and preserves other users, platforms and past events", async () => {
+  rows = Array.from({ length: 55 }, (_, i) => ({
+    ...row, id: `target-${i}`, contestId: `contest-${i}`, calendarEventId: `event-${i}`,
+  }));
+  const excluded: SyncedContest[] = [
+    { ...row, id: "other-user", userId: "someone-else" },
+    { ...row, id: "other-platform", platform: "codechef.com" },
+    { ...row, id: "past", startTime: new Date(Date.now() - 86_400_000) },
+    { ...row, id: "ongoing", startTime: new Date(Date.now() - 60_000) },
+    { ...row, id: "failed", status: "FAILED" },
+    { ...row, id: "deleted", status: "DELETED" },
+    { ...row, id: "no-event", calendarEventId: null },
+  ];
+  const unchanged = structuredClone(excluded);
+  rows.push(...excluded);
+
+  assert.deepEqual(await removeUserPlatformContests("owner", "codeforces.com"), {
+    ok: true, removed: 55, failed: 0,
+  });
+  assert.equal(deletedEventIds.length, 55);
+  assert.ok(rows.slice(0, 55).every((record) => record.status === "DELETED"));
+  assert.deepEqual(excluded, unchanged);
+  assert.deepEqual(await removeUserPlatformContests("owner", "codeforces.com"), {
+    ok: true, removed: 0, failed: 0,
+  });
+  assert.equal(deletedEventIds.length, 55);
+});
+
+test("platform removal reports partial failures and retries only remaining events", async () => {
+  rows.push({ ...row, id: "row-2", calendarEventId: "google-event-2" });
+  eventErrors.set("google-event-1", new Error("Google unavailable"));
+  stub(console, "error", () => {});
+  assert.deepEqual(await removeUserPlatformContests("owner", row.platform), {
+    ok: true, removed: 1, failed: 1,
+  });
+  assert.equal(row.status, "SUCCESS");
+  assert.equal(rows[1].status, "DELETED");
+  eventErrors.clear();
+  assert.deepEqual(await removeUserPlatformContests("owner", row.platform), {
+    ok: true, removed: 1, failed: 0,
+  });
+  assert.deepEqual(deletedEventIds, ["google-event-1", "google-event-2", "google-event-1"]);
+});
+
+test("platform removal preserves events when credentials are missing", async () => {
+  hasCredential = false;
+  const result = await removeUserPlatformContests("owner", row.platform);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.status, 409);
+  assert.equal(row.status, "SUCCESS");
+  assert.deepEqual(deletedEventIds, []);
+});
+
+test("platform removal with no matching events is a safe no-op", async () => {
+  hasCredential = false;
+  assert.deepEqual(await removeUserPlatformContests("owner", "codechef.com"), {
+    ok: true, removed: 0, failed: 0,
+  });
+  assert.deepEqual(deletedEventIds, []);
+});
+
+test("platform removal rejects invalid platforms before looking up events", async () => {
+  stub(prisma.syncedContest, "findMany", () => { throw new Error("Must not query"); });
+  const result = await removeUserPlatformContests("owner", "unknown-platform");
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.status, 400);
+  assert.deepEqual(deletedEventIds, []);
 });
 
 afterEach(() => {

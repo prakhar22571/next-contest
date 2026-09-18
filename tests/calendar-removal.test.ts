@@ -5,7 +5,7 @@ import type { SyncedContest } from "@prisma/client";
 import { prisma } from "../src/lib/prisma";
 import { encrypt } from "../src/lib/crypto";
 import { removeUserContest, removeUserPlatformContests } from "../src/lib/sync/removeUserContest";
-import { syncUserContests } from "../src/lib/sync/syncUser";
+import { syncUserContests, clearRemovedContests } from "../src/lib/sync/syncUser";
 
 let row: SyncedContest;
 let rows: SyncedContest[];
@@ -58,6 +58,17 @@ beforeEach(() => {
     (!where.startTime || record.startTime >= where.startTime.gte) &&
     (!where.calendarEventId || record.calendarEventId !== null)
   ).slice(0, take).map((record) => ({ ...record })));
+  stub(prisma.syncedContest, "deleteMany", async ({ where }: {
+    where: { userId: string; platform: { in: string[] }; status: string };
+  }) => {
+    const before = rows.length;
+    rows = rows.filter((record) => !(
+      record.userId === where.userId &&
+      where.platform.in.includes(record.platform) &&
+      record.status === where.status
+    ));
+    return { count: before - rows.length };
+  });
   stub(prisma.syncedContest, "update", async ({ where, data }: {
     where: { id: string; userId: string }; data: Partial<SyncedContest>;
   }) => {
@@ -167,6 +178,28 @@ test("removes the owned Google event and retains an exclusion; repeat requests a
   assert.deepEqual(deletedEventIds, ["google-event-1"]);
   assert.deepEqual(await removeUserContest("owner", row.id), { ok: true });
   assert.equal(deletedEventIds.length, 1);
+});
+
+test("clearing removed contests only affects the given user and platforms", async () => {
+  rows.push(
+    { ...row, id: "deleted-codeforces", status: "DELETED" },
+    { ...row, id: "deleted-codechef", platform: "codechef.com", status: "DELETED" },
+    { ...row, id: "success-codeforces", status: "SUCCESS" },
+    { ...row, id: "deleted-other-user", userId: "someone-else", status: "DELETED" },
+  );
+  await clearRemovedContests("owner", ["codeforces.com"]);
+  assert.deepEqual(rows.map((r) => r.id), [
+    "row-1", "deleted-codechef", "success-codeforces", "deleted-other-user",
+  ]);
+  await clearRemovedContests("owner", []);
+  assert.equal(rows.length, 4);
+});
+
+test("re-selecting a platform after removal lets its contest sync again", async () => {
+  await removeUserContest("owner", row.id);
+  assert.equal(row.status, "DELETED");
+  await clearRemovedContests("owner", [row.platform]);
+  assert.equal(rows.length, 0);
 });
 
 test("another user cannot delete or discover the owner's event", async () => {

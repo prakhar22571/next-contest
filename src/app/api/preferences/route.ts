@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { daysFromNow, errorMessage } from "@/lib/util";
 import { fetchContests } from "@/lib/contests";
 import { preferencesSchema } from "@/lib/validation/preferences";
-import { syncUserContests } from "@/lib/sync/syncUser";
+import { syncUserContests, clearRemovedContests } from "@/lib/sync/syncUser";
 
 export async function GET() {
   const session = await auth();
@@ -24,12 +24,18 @@ export async function PUT(req: Request) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const { platforms, daysAhead, timeZone } = parsed.data;
+  const userId = session.user.id;
+
+  const previous = await prisma.userPreference.findUnique({ where: { userId } });
+  const newlyAdded = platforms.filter((p) => !previous?.platforms.includes(p));
 
   const preference = await prisma.userPreference.upsert({
-    where: { userId: session.user.id },
-    create: { userId: session.user.id, platforms, daysAhead, timeZone },
+    where: { userId },
+    create: { userId, platforms, daysAhead, timeZone },
     update: { platforms, daysAhead, timeZone },
   });
+
+  await clearRemovedContests(userId, newlyAdded);
 
   try {
     const contests = await fetchContests({
@@ -37,7 +43,7 @@ export async function PUT(req: Request) {
       startGte: new Date(),
       startLte: daysFromNow(daysAhead),
     });
-    const sync = await syncUserContests(session.user.id, "MANUAL", contests);
+    const sync = await syncUserContests(userId, "MANUAL", contests);
     return Response.json({ preference, sync });
   } catch (err) {
     return Response.json({ preference, syncError: errorMessage(err) }, { status: 207 });

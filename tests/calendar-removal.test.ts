@@ -258,7 +258,7 @@ for (const trigger of ["MANUAL", "CRON"] as const) {
   test(`${trigger} sync skips removed contests while adding new contests and retrying failures`, async () => {
     await removeUserContest("owner", row.id);
     stub(prisma.userPreference, "findUnique", async () => ({
-      platforms: ["codeforces.com"], daysAhead: 14, timeZone: "UTC",
+      platforms: ["codeforces.com"], codeforcesDivisions: [], daysAhead: 14, timeZone: "UTC",
     }));
     stub(prisma.syncedContest, "findMany", async ({ where }: {
       where: { userId: string; status: { in: string[] } };

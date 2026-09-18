@@ -1,19 +1,34 @@
 "use client";
 
-import { PLATFORM_CATALOG } from "@/lib/contests/platforms";
+import { PLATFORM_CATALOG, CODEFORCES_DIVISIONS } from "@/lib/contests/platforms";
 
 interface PlatformSelectorProps {
   selected: string[];
   onChange: (slugs: string[]) => void;
+  codeforcesDivisions: string[];
+  onCodeforcesDivisionsChange: (divisions: string[]) => void;
 }
 
-export function PlatformSelector({ selected, onChange }: PlatformSelectorProps) {
+export function PlatformSelector({
+  selected,
+  onChange,
+  codeforcesDivisions,
+  onCodeforcesDivisionsChange,
+}: PlatformSelectorProps) {
   function toggle(slug: string) {
     if (selected.includes(slug)) {
       onChange(selected.filter((s) => s !== slug));
     } else {
       onChange([...selected, slug]);
     }
+  }
+
+  function toggleDivision(div: string) {
+    onCodeforcesDivisionsChange(
+      codeforcesDivisions.includes(div)
+        ? codeforcesDivisions.filter((d) => d !== div)
+        : [...codeforcesDivisions, div]
+    );
   }
 
   return (
@@ -37,6 +52,22 @@ export function PlatformSelector({ selected, onChange }: PlatformSelectorProps) 
           </label>
         ))}
       </div>
+      {selected.includes("codeforces.com") && (
+        <div className="flex flex-wrap items-center gap-3 pl-1">
+          <span className="text-xs text-zinc-500">Codeforces divisions (all if none picked):</span>
+          {CODEFORCES_DIVISIONS.map((div) => (
+            <label key={div} className="flex items-center gap-1 text-xs text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={codeforcesDivisions.includes(div)}
+                onChange={() => toggleDivision(div)}
+                className="h-3.5 w-3.5"
+              />
+              Div {div}
+            </label>
+          ))}
+        </div>
+      )}
     </fieldset>
   );
 }

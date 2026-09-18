@@ -14,15 +14,30 @@ type Outcome =
   | { status: "SUCCESS"; calendarEventId: string | null }
   | { status: "FAILED"; errorMessage: string };
 
+// Codeforces has no division field in the API - it's embedded in the round
+// name ("Div. 2", "Div. 1 + Div. 2"). A round mentioning none (Global Rounds,
+// specials) isn't division-specific, so it's unaffected by the filter.
+const DIV_PATTERN = /div\.\s*([1-4])/gi;
+
+function matchesDivisionFilter(contest: Contest, divisions: UserPreference["codeforcesDivisions"]): boolean {
+  if (contest.resource !== "codeforces.com" || divisions.length === 0) return true;
+  const mentioned = [...contest.event.matchAll(DIV_PATTERN)].map((m) => m[1]);
+  return mentioned.length === 0 || mentioned.some((d) => divisions.includes(d));
+}
+
 // Narrow a batch of contests to the ones this user actually wants: their
-// selected platforms, starting within their look-ahead window.
+// selected platforms and Codeforces divisions, starting within their
+// look-ahead window.
 export function contestsForPreference(
   contests: Contest[],
-  pref: Pick<UserPreference, "platforms" | "daysAhead">
+  pref: Pick<UserPreference, "platforms" | "daysAhead" | "codeforcesDivisions">
 ): Contest[] {
   const cutoff = Date.now() + pref.daysAhead * DAY_MS;
   return contests.filter(
-    (c) => pref.platforms.includes(c.resource) && new Date(c.start).getTime() <= cutoff
+    (c) =>
+      pref.platforms.includes(c.resource) &&
+      new Date(c.start).getTime() <= cutoff &&
+      matchesDivisionFilter(c, pref.codeforcesDivisions)
   );
 }
 

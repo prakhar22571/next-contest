@@ -91,14 +91,16 @@ model Platform {
 }
 
 model UserPreference {
-  id           String    @id @default(cuid())
-  userId       String    @unique
-  platforms    String[]
-  daysAhead    Int       @default(14)
-  timeZone     String    @default("UTC")
-  lastSyncedAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  platforms           String[]
+  // Codeforces round divisions to include ("1".."4"); empty means all.
+  codeforcesDivisions String[]  @default([])
+  daysAhead           Int       @default(14)
+  timeZone            String    @default("UTC")
+  lastSyncedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

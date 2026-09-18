@@ -23,13 +23,13 @@ export async function PUT(req: Request) {
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { platforms, daysAhead, timeZone } = parsed.data;
+  const { platforms, codeforcesDivisions, daysAhead, timeZone } = parsed.data;
   const userId = session.user.id;
 
   const preference = await prisma.userPreference.upsert({
     where: { userId },
-    create: { userId, platforms, daysAhead, timeZone },
-    update: { platforms, daysAhead, timeZone },
+    create: { userId, platforms, codeforcesDivisions, daysAhead, timeZone },
+    update: { platforms, codeforcesDivisions, daysAhead, timeZone },
   });
 
   try {

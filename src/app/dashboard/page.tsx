@@ -67,6 +67,7 @@ export default async function DashboardPage() {
 
       <PreferencesForm
         initialPlatforms={preference?.platforms ?? []}
+        initialCodeforcesDivisions={preference?.codeforcesDivisions ?? []}
         initialDaysAhead={preference?.daysAhead ?? 14}
         timeZone={preference?.timeZone ?? "UTC"}
       />

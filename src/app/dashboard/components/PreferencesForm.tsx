@@ -7,17 +7,20 @@ import { DaysAheadSelector } from "./DaysAheadSelector";
 
 interface PreferencesFormProps {
   initialPlatforms: string[];
+  initialCodeforcesDivisions: string[];
   initialDaysAhead: number;
   timeZone: string;
 }
 
 export function PreferencesForm({
   initialPlatforms,
+  initialCodeforcesDivisions,
   initialDaysAhead,
   timeZone,
 }: PreferencesFormProps) {
   const router = useRouter();
   const [platforms, setPlatforms] = useState(initialPlatforms);
+  const [codeforcesDivisions, setCodeforcesDivisions] = useState(initialCodeforcesDivisions);
   const [daysAhead, setDaysAhead] = useState(initialDaysAhead);
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +34,7 @@ export function PreferencesForm({
       const res = await fetch("/api/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platforms, daysAhead, timeZone }),
+        body: JSON.stringify({ platforms, codeforcesDivisions, daysAhead, timeZone }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -58,7 +61,12 @@ export function PreferencesForm({
 
   return (
     <div className="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-      <PlatformSelector selected={platforms} onChange={setPlatforms} />
+      <PlatformSelector
+        selected={platforms}
+        onChange={setPlatforms}
+        codeforcesDivisions={codeforcesDivisions}
+        onCodeforcesDivisionsChange={setCodeforcesDivisions}
+      />
       <DaysAheadSelector value={daysAhead} onChange={setDaysAhead} />
       <div className="flex items-center gap-3">
         <button

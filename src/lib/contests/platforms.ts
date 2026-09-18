@@ -10,6 +10,10 @@ export const PLATFORM_CATALOG = [
 
 export type PlatformSlug = (typeof PLATFORM_CATALOG)[number]["slug"];
 
+// Codeforces round names embed their division as free text ("Div. 2"), so this
+// is just the set of values users can filter by, not a field the API returns.
+export const CODEFORCES_DIVISIONS = ["1", "2", "3", "4"] as const;
+
 const SLUG_SET = new Set<string>(PLATFORM_CATALOG.map((p) => p.slug));
 
 export function isValidPlatformSlug(slug: string): slug is PlatformSlug {

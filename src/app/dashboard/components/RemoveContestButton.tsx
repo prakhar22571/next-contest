@@ -27,45 +27,76 @@ export function RemoveContestButton({ id, title }: { id: string; title: string }
   }
 
   if (status === "removed") {
-    return <span role="status" className="text-zinc-500">Removed from calendar.</span>;
+    return (
+      <span role="status" className="inline-flex size-9 items-center justify-center text-zinc-500">
+        <ActionIcon name="check" />
+        <span className="sr-only">Removed from calendar.</span>
+      </span>
+    );
   }
 
   return (
-    <div className="flex min-w-36 flex-col gap-2">
+    <div className="flex min-w-20 flex-col gap-2">
       {confirming ? (
-        <>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">Remove this event from Google Calendar?</p>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={remove}
-              disabled={status === "removing"}
-              aria-label={`Confirm removal of ${title} from calendar`}
-              className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
-            >
-              {status === "removing" ? "Removing…" : "Remove"}
-            </button>
-            <button
-              type="button"
-              disabled={status === "removing"}
-              onClick={() => { setConfirming(false); setError(null); }}
-              className="text-xs text-zinc-500 underline disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </>
+        <div role="group" aria-label={`Remove ${title} from Google Calendar?`} className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={remove}
+            disabled={status === "removing"}
+            aria-label={status === "removing" ? `Removing ${title} from calendar` : `Confirm removal of ${title} from calendar`}
+            aria-busy={status === "removing"}
+            title="Confirm removal"
+            className="inline-flex size-9 items-center justify-center rounded-md text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950"
+          >
+            <ActionIcon name={status === "removing" ? "spinner" : "check"} />
+          </button>
+          <button
+            type="button"
+            disabled={status === "removing"}
+            onClick={() => { setConfirming(false); setError(null); }}
+            aria-label={`Cancel removal of ${title}`}
+            title="Cancel"
+            className="inline-flex size-9 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+          >
+            <ActionIcon name="cross" />
+          </button>
+        </div>
       ) : (
         <button
           type="button"
           onClick={() => setConfirming(true)}
           aria-label={`Remove ${title} from calendar`}
-          className="self-start rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 dark:border-zinc-700 dark:text-zinc-300 dark:hover:text-red-400"
+          title="Remove from calendar"
+          className="inline-flex size-9 items-center justify-center self-start rounded-md text-zinc-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950 dark:hover:text-red-400"
         >
-          Remove from calendar
+          <ActionIcon name="trash" />
         </button>
       )}
       {error && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
+  );
+}
+
+function ActionIcon({ name }: { name: "trash" | "check" | "cross" | "spinner" }) {
+  const paths = {
+    trash: "M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6",
+    check: "m5 12 4 4L19 6",
+    cross: "m6 6 12 12M6 18 18 6",
+    spinner: "M20 12a8 8 0 1 1-8-8",
+  };
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`size-4 ${name === "spinner" ? "animate-spin motion-reduce:animate-none" : ""}`}
+    >
+      <path d={paths[name]} />
+    </svg>
   );
 }

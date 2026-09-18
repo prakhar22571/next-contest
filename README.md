@@ -4,9 +4,10 @@ Sign in with Google, pick which competitive-programming platforms you follow and
 ahead to look, and upcoming contests get added straight to your Google Calendar — both
 immediately when you save, and automatically every day via a scheduled sync.
 
-Remove unwanted upcoming contests from Google Calendar using **Remove from calendar** on the
-dashboard. After confirmation, the event is deleted and excluded from future manual and daily
-syncs. Removal only affects the signed-in user's event; failed removals can be retried.
+Remove unwanted upcoming contests from Google Calendar using the **trash icon** on the
+dashboard, then the **tick** to confirm or **cross** to cancel. After confirmation, the event is
+deleted and excluded from future manual and daily syncs. Removal only affects the signed-in
+user's event; failed removals can be retried.
 
 ## Stack
 

@@ -15,7 +15,7 @@ export default async function DashboardPage() {
   const userId = session.user.id;
 
   const now = new Date();
-  const [preference, latestRun, upcomingContests, platformCounts] = await Promise.all([
+  const [preference, latestRun, upcomingContests, platformCounts, removedCounts] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId } }),
     prisma.syncRun.findFirst({ where: { userId }, orderBy: { startedAt: "desc" } }),
     prisma.syncedContest.findMany({
@@ -32,7 +32,18 @@ export default async function DashboardPage() {
       _count: { _all: true },
       orderBy: { platform: "asc" },
     }),
+    prisma.syncedContest.groupBy({
+      by: ["platform"],
+      where: { userId, status: "DELETED" },
+      _count: { _all: true },
+      orderBy: { platform: "asc" },
+    }),
   ]);
+
+  // Restoring only makes sense for a platform still selected in preferences.
+  const restorablePlatforms = removedCounts
+    .filter((group) => preference?.platforms.includes(group.platform))
+    .map((group) => ({ platform: group.platform, count: group._count._all }));
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-12">
@@ -65,6 +76,7 @@ export default async function DashboardPage() {
       <UpcomingContestsList
         contests={upcomingContests}
         platformCounts={platformCounts.map((group) => ({ platform: group.platform, count: group._count._all }))}
+        restorablePlatforms={restorablePlatforms}
       />
     </div>
   );

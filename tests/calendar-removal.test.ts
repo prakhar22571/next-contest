@@ -195,13 +195,6 @@ test("clearing removed contests only affects the given user and platforms", asyn
   assert.equal(rows.length, 4);
 });
 
-test("re-selecting a platform after removal lets its contest sync again", async () => {
-  await removeUserContest("owner", row.id);
-  assert.equal(row.status, "DELETED");
-  await clearRemovedContests("owner", [row.platform]);
-  assert.equal(rows.length, 0);
-});
-
 test("another user cannot delete or discover the owner's event", async () => {
   const result = await removeUserContest("other-user", row.id);
   assert.equal(result.ok, false);

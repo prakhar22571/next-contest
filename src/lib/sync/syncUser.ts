@@ -26,9 +26,9 @@ export function contestsForPreference(
   );
 }
 
-// Re-selecting a platform should let its removed contests come back. Clears
-// the DELETED exclusion only for the given (newly-selected) platforms, so an
-// unrelated preference save doesn't resurrect contests still deselected.
+// Clears the DELETED exclusion for the given platforms, letting removed
+// contests be recreated on the next sync. Used by the platform restore
+// endpoint (an explicit "undo remove"), scoped by the caller to one platform.
 export async function clearRemovedContests(userId: string, platforms: string[]): Promise<void> {
   if (platforms.length === 0) return;
   await prisma.syncedContest.deleteMany({

@@ -17,6 +17,53 @@ export function RemovePlatformContestsButton({ platform, count }: { platform: st
   );
 }
 
+export function RestorePlatformContestsButton({ platform, count }: { platform: string; count: number }) {
+  const router = useRouter();
+  const [status, setStatus] = useState<"idle" | "restoring" | "restored">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const title = `${count} removed ${platformName(platform)} event${count === 1 ? "" : "s"}`;
+
+  async function restore() {
+    setStatus("restoring");
+    setError(null);
+    try {
+      const response = await fetch(`/api/contests/platform/${encodeURIComponent(platform)}`, {
+        method: "POST",
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.failed > 0) {
+        router.refresh();
+        throw new Error(body?.error ?? "Could not restore calendar events. Please try again.");
+      }
+      setStatus("restored");
+      router.refresh();
+    } catch (err) {
+      setStatus("idle");
+      setError(err instanceof Error ? err.message : "Could not restore calendar events. Please try again.");
+    }
+  }
+
+  if (status === "restored") {
+    return <span className="text-xs text-zinc-500">Restored.</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={restore}
+        disabled={status === "restoring"}
+        aria-busy={status === "restoring"}
+        title={`Restore ${title} to calendar`}
+        className="whitespace-nowrap text-xs underline text-zinc-600 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-100"
+      >
+        {status === "restoring" ? "Restoring…" : `Restore ${count} removed`}
+      </button>
+      {error && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+    </div>
+  );
+}
+
 function RemoveCalendarButton({ endpoint, title }: { endpoint: string; title: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);

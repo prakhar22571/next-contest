@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { daysFromNow, errorMessage } from "@/lib/util";
 import { fetchContests } from "@/lib/contests";
 import { preferencesSchema } from "@/lib/validation/preferences";
-import { syncUserContests, clearRemovedContests } from "@/lib/sync/syncUser";
+import { syncUserContests } from "@/lib/sync/syncUser";
 
 export async function GET() {
   const session = await auth();
@@ -26,16 +26,11 @@ export async function PUT(req: Request) {
   const { platforms, daysAhead, timeZone } = parsed.data;
   const userId = session.user.id;
 
-  const previous = await prisma.userPreference.findUnique({ where: { userId } });
-  const newlyAdded = platforms.filter((p) => !previous?.platforms.includes(p));
-
   const preference = await prisma.userPreference.upsert({
     where: { userId },
     create: { userId, platforms, daysAhead, timeZone },
     update: { platforms, daysAhead, timeZone },
   });
-
-  await clearRemovedContests(userId, newlyAdded);
 
   try {
     const contests = await fetchContests({

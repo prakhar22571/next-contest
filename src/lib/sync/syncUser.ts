@@ -29,7 +29,11 @@ export function contestsForPreference(
 async function syncedContestIds(userId: string, contests: Contest[]): Promise<Set<string>> {
   if (contests.length === 0) return new Set();
   const rows = await prisma.syncedContest.findMany({
-    where: { userId, status: "SUCCESS", contestId: { in: contests.map((c) => c.id) } },
+    where: {
+      userId,
+      status: { in: ["SUCCESS", "DELETED"] },
+      contestId: { in: contests.map((c) => c.id) },
+    },
     select: { contestId: true },
   });
   return new Set(rows.map((r) => r.contestId));
@@ -91,7 +95,7 @@ async function withSyncRun(
 }
 
 // Syncs one user against a batch of already-fetched contests: create a calendar
-// event for each new one, skip those already synced, retry past failures. A
+// event for each new one, skip those already synced or removed, retry past failures. A
 // per-contest failure is recorded and doesn't stop the batch. Returns null if
 // the user has nothing configured.
 export async function syncUserContests(

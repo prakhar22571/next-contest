@@ -4,6 +4,10 @@ Sign in with Google, pick which competitive-programming platforms you follow and
 ahead to look, and upcoming contests get added straight to your Google Calendar — both
 immediately when you save, and automatically every day via a scheduled sync.
 
+Remove unwanted upcoming contests from Google Calendar using **Remove from calendar** on the
+dashboard. After confirmation, the event is deleted and excluded from future manual and daily
+syncs. Removal only affects the signed-in user's event; failed removals can be retried.
+
 ## Stack
 
 Next.js (App Router) + Auth.js (NextAuth v5, Google OAuth) + Prisma/Postgres + the Google
@@ -81,11 +85,17 @@ screen asks for calendar-events access.
 
 ## Verifying end-to-end
 
+Run `npm test` for the calendar-removal and sync regression tests (Google and database calls are
+mocked). Apply pending database migrations with `npm run db:deploy` before running the updated
+app; Netlify applies these automatically during deployment.
+
 1. Sign in, select a couple of platforms and a day range on `/dashboard`, and save — check that
    events show up in your real Google Calendar with the right title/time/link.
 2. Save the same preferences again and confirm no duplicate events are created.
 3. `curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync-all` to
    exercise the cron fan-out path manually.
+4. Remove a contest from the dashboard, confirm that its Google Calendar event disappears, then
+   sync again and confirm that it stays removed. Cancelling a removal should leave it unchanged.
 
 ## Deploying (free tier: Netlify + Neon + GitHub Actions)
 

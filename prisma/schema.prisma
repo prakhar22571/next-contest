@@ -106,6 +106,7 @@ model UserPreference {
 enum SyncContestStatus {
   SUCCESS
   FAILED
+  DELETED
 }
 
 // One row per (user, contest) - prevents duplicate calendar events across repeated syncs.

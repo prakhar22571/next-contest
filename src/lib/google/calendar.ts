@@ -51,3 +51,15 @@ export async function createContestEvent(auth: OAuth2Client, contest: Contest, t
   });
   return res.data;
 }
+
+export async function deleteContestEvent(auth: OAuth2Client, eventId: string) {
+  const calendar = google.calendar({ version: "v3", auth });
+  try {
+    await calendar.events.delete({ calendarId: "primary", eventId });
+  } catch (err) {
+    // An event already removed in Google Calendar needs no further deletion.
+    // Other failures must leave the local record available for a retry.
+    const status = (err as { response?: { status?: number } } | null)?.response?.status;
+    if (status !== 404 && status !== 410) throw err;
+  }
+}
